@@ -1,0 +1,7 @@
+Serfot Task
+        Pulls the Title
+        Puts all the tasks in menu
+        Adds finish task functionality
+        Adds Complete task functionality
+        Adds cancel task functionality
+        Save and Analyze Data

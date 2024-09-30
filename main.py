@@ -52,7 +52,7 @@ class AppDelegate(NSObject):
         )
 
         self.title_update_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            5.0, self, "updateTitleAndMenuItems:", None, True
+            2.0, self, "updateTitleAndMenuItems:", None, True
         )
 
     def get_next_uncompleted_task_index(self):

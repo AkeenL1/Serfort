@@ -18,18 +18,24 @@ from Cocoa import (
 
 class AppDelegate(NSObject):
     def applicationDidFinishLaunching_(self, notification):
-        self.current_item_index = 0
-        self.done_items = {}
+        self.done_items = []  # Changed to list to track done tasks by name
 
-        # Create the status bar item
+        # Status bar
         status_bar = NSStatusBar.systemStatusBar()
         self.status_item = status_bar.statusItemWithLength_(NSVariableStatusItemLength)
-        self.status_item.setHighlightMode_(True)
 
-        # Create a menu for the status item
+        # Create a menu
         self.menu = NSMenu.alloc().init()
 
+        # Read tasks from file
         self.title, self.todo_menu_items = self.read_file()
+
+        # Initialize current_task to the first uncompleted task
+        self.current_item_index = self.get_next_uncompleted_task_index()
+        if self.current_item_index is not None:
+            self.current_task = self.todo_menu_items[self.current_item_index]
+        else:
+            self.current_task = None
 
         self.update_menu_items()
 
@@ -49,6 +55,12 @@ class AppDelegate(NSObject):
             5.0, self, "updateTitleAndMenuItems:", None, True
         )
 
+    def get_next_uncompleted_task_index(self):
+        for idx, task in enumerate(self.todo_menu_items):
+            if not any(done.startswith(task) for done in self.done_items):
+                return idx
+        return None  # All tasks are done
+
     def updateTimer_(self, timer):
         elapsed_time = time.time() - self.start_time
         hours, remainder = divmod(elapsed_time, 3600)
@@ -65,14 +77,14 @@ class AppDelegate(NSObject):
         )
 
         # Get the current active subtask
-        if self.current_item_index < len(self.todo_menu_items):
+        if self.current_item_index is not None and self.current_item_index < len(self.todo_menu_items):
             current_subtask = self.todo_menu_items[self.current_item_index]
         else:
             current_subtask = "All Tasks Completed"
 
         # Set maximum lengths
         max_title_length = 15  # Adjust as needed
-        max_subtask_length = 20  # Adjust as needed
+        max_subtask_length = 15  # Adjust as needed
 
         # Truncate the title if necessary
         truncated_title = (self.title[:max_title_length] + '...') if len(self.title) > max_title_length else self.title
@@ -115,15 +127,22 @@ class AppDelegate(NSObject):
                         break
             return title if title else "No Title", menu_items
         except FileNotFoundError:
-            return "No Title"
+            return "No Title", []  # Ensure both title and menu_items are returned
         except Exception as e:
             # Handle other potential exceptions
             print(f"Error reading 'todolist.txt': {e}")
-            return "No Title"
+            return "No Title", []  # Ensure both title and menu_items are returned
 
     def updateTitleAndMenuItems_(self, timer):
         # Read the updated title and menu items
-        self.title, self.todo_menu_items = self.read_todo_title_and_items()
+        self.title, self.todo_menu_items = self.read_file()
+
+        # Update the current_item_index based on the first uncompleted task
+        self.current_item_index = self.get_next_uncompleted_task_index()
+        if self.current_item_index is not None:
+            self.current_task = self.todo_menu_items[self.current_item_index]
+        else:
+            self.current_task = None
 
         # Update the menu items
         self.update_menu_items()
@@ -136,22 +155,27 @@ class AppDelegate(NSObject):
         next_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Next", "nextItem:", ""
         )
-        if self.current_item_index >= len(self.todo_menu_items):
+        
+        if self.current_item_index is None or self.current_item_index >= len(self.todo_menu_items):
             next_item.setEnabled_(False)
         self.menu.addItem_(next_item)
+        print("Added 'Next' menu item")
 
         # Add updated todo items to the menu
-        for idx, item_text in enumerate(self.todo_menu_items):
-            # Check if this item is marked as done
-            if idx in self.done_items:
-                item_text += self.done_items[idx]
+        for task in self.todo_menu_items:
+            # Check if this task is marked as done
+            done_entry = next((done for done in self.done_items if done.startswith(task)), None)
+            if done_entry:
+                # Display the done version
+                menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                    done_entry, "", ""
+                )
+            else:
+                # Display the pending task
+                menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                    task, "", ""
+                )
 
-            menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                item_text, "", ""
-            )
-            # Optionally disable the item if it's done
-            if idx in self.done_items:
-                menu_item.setEnabled_(False)
             self.menu.addItem_(menu_item)
 
         # Add a separator
@@ -164,7 +188,7 @@ class AppDelegate(NSObject):
         self.menu.addItem_(quit_item)
 
     def nextItem_(self, sender):
-        if self.current_item_index < len(self.todo_menu_items):
+        if self.current_item_index is not None and self.current_item_index < len(self.todo_menu_items):
             # Get the current time snapshot
             elapsed_time = time.time() - self.start_time
             hours, remainder = divmod(elapsed_time, 3600)
@@ -180,11 +204,17 @@ class AppDelegate(NSObject):
                 milliseconds,
             )
 
-            # Mark the current item as done
-            self.done_items[self.current_item_index] = f" | DONE | {time_string}"
+            # Mark the current task as done
+            current_task = self.todo_menu_items[self.current_item_index]
+            done_entry = f"{current_task} | DONE | {time_string}"
+            self.done_items.append(done_entry)  # Append to list instead of dict
 
-            # Increment current_item_index
-            self.current_item_index += 1
+            # Find the next uncompleted task
+            self.current_item_index = self.get_next_uncompleted_task_index()
+            if self.current_item_index is not None:
+                self.current_task = self.todo_menu_items[self.current_item_index]
+            else:
+                self.current_task = None
 
             # Update the menu items to reflect the change
             self.update_menu_items()
@@ -195,6 +225,8 @@ class AppDelegate(NSObject):
     def applicationWillTerminate_(self, notification):
         # Invalidate the timer when the application is about to quit
         self.timer.invalidate()
+        self.title_update_timer.invalidate()
+
 
 if __name__ == "__main__":
     app = NSApplication.sharedApplication()

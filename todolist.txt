@@ -1,4 +1,10 @@
-Serfot Task
+Serfot Time
+        seven
+        six
+        five
+        four
+        three
+        one
         Pulls the Title
         Puts all the tasks in menu
         Adds finish task functionality

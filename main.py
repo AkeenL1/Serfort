@@ -155,11 +155,10 @@ class AppDelegate(NSObject):
         next_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Next", "nextItem:", ""
         )
-        
+
         if self.current_item_index is None or self.current_item_index >= len(self.todo_menu_items):
             next_item.setEnabled_(False)
         self.menu.addItem_(next_item)
-        print("Added 'Next' menu item")
 
         # Add updated todo items to the menu
         for task in self.todo_menu_items:

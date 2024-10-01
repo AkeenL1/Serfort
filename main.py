@@ -18,7 +18,12 @@ from Cocoa import (
 
 class AppDelegate(NSObject):
     def applicationDidFinishLaunching_(self, notification):
-        self.done_items = []  # Changed to list to track done tasks by name
+        self.done_items = []  # Track done tasks by name
+
+        # Initialize pause state
+        self.is_paused = False
+        self.pause_time = None
+        self.total_paused_time = 0.0
 
         # Status bar
         status_bar = NSStatusBar.systemStatusBar()
@@ -37,12 +42,16 @@ class AppDelegate(NSObject):
         else:
             self.current_task = None
 
+        # **Initialize Pause/Resume Menu Item First**
+        self.pause_menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Pause", "togglePause:", ""
+        )
+
+        # **Now Update Menu Items**
         self.update_menu_items()
 
-        self.menu.addItem_(NSMenuItem.separatorItem())
-
-        self.status_item.setMenu_(self.menu)
         # Attach the menu to the status item
+        self.status_item.setMenu_(self.menu)
 
         self.start_time = time.time()
         # Update the status bar item's title
@@ -62,7 +71,11 @@ class AppDelegate(NSObject):
         return None  # All tasks are done
 
     def updateTimer_(self, timer):
-        elapsed_time = time.time() - self.start_time
+        if self.is_paused:
+            return  # Do not update elapsed time if paused
+
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time - self.total_paused_time
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, remainder = divmod(remainder, 60)
         seconds, milliseconds = divmod(remainder, 1)
@@ -180,6 +193,12 @@ class AppDelegate(NSObject):
         # Add a separator
         self.menu.addItem_(NSMenuItem.separatorItem())
 
+        # **Add Pause/Resume menu item**
+        self.menu.addItem_(self.pause_menu_item)
+
+        # Add another separator
+        self.menu.addItem_(NSMenuItem.separatorItem())
+
         # Add a "Quit" menu item
         quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Quit", "terminate:", ""
@@ -189,7 +208,8 @@ class AppDelegate(NSObject):
     def nextItem_(self, sender):
         if self.current_item_index is not None and self.current_item_index < len(self.todo_menu_items):
             # Get the current time snapshot
-            elapsed_time = time.time() - self.start_time
+            current_time = time.time()
+            elapsed_time = current_time - self.start_time - self.total_paused_time
             hours, remainder = divmod(elapsed_time, 3600)
             minutes, remainder = divmod(remainder, 60)
             seconds, milliseconds = divmod(remainder, 1)
@@ -221,8 +241,28 @@ class AppDelegate(NSObject):
             # All items are done; disable the "Next" button
             sender.setEnabled_(False)
 
+    def togglePause_(self, sender):
+        if not self.is_paused:
+            # Pause the timer
+            self.is_paused = True
+            self.pause_time = time.time()
+            self.timer.invalidate()
+            self.pause_menu_item.setTitle_("Resume")
+        else:
+            # Resume the timer
+            self.is_paused = False
+            if self.pause_time:
+                paused_duration = time.time() - self.pause_time
+                self.total_paused_time += paused_duration
+                self.pause_time = None
+            # Restart the timer
+            self.timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                0.05, self, "updateTimer:", None, True
+            )
+            self.pause_menu_item.setTitle_("Pause")
+
     def applicationWillTerminate_(self, notification):
-        # Invalidate the timer when the application is about to quit
+        # Invalidate the timers when the application is about to quit
         self.timer.invalidate()
         self.title_update_timer.invalidate()
 
